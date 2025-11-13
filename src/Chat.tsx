@@ -1,30 +1,159 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 
+const API_BASE = import.meta.env.VITE_API_BASE_URL;
+
+// message type
 type Message = { sender: "user" | "bot"; text: string };
 
+// initial placeholder messages before backend history loads
 const initialMessages: Message[] = [
   { sender: "bot", text: "Hi there! How can I make your day smarter?" },
 ];
 
 export default function Chat() {
-  const [messages, setMessages] = useState(initialMessages);
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState("");
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(true);
   const [typing, setTyping] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
-  // LOGIN STATES
-  const [email, setEmail] = useState("");
-  const [pass, setPass] = useState("");
-  const [error, setError] = useState("");
-  const [loggedIn, setLoggedIn] = useState(() => {
-  return localStorage.getItem("auth") === "false" ;
-});
-
+  // login states
+  const [userId, setUserId] = useState<string | null>(localStorage.getItem("user_id"));
+  const [loginUserId, setLoginUserId] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Auto scroll
+    // ------------------------------
+  // LOGIN API CALL
+  // ------------------------------
+  const handleLogin = async () => {
+    setLoginError("");
+
+    try {
+      const res = await fetch(`${API_BASE}/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: loginUserId,
+          password: loginPassword,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!data.success) {
+        setLoginError("Invalid credentials");
+        return;
+      }
+
+      // store user_id
+      localStorage.setItem("user_id", data.user_id);
+      setUserId(data.user_id);
+
+    } catch (err) {
+      setLoginError("Unable to connect to server");
+      console.log(err)
+    }
+  };
+
+  // ------------------------------
+  // LOAD HISTORY
+  // ------------------------------
+  const loadChatHistory = async (id: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/chat/history/${id}`);
+      const data = await res.json();
+
+      if (data?.messages) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const formatted = data.messages.map((m: any) => ({
+          sender: m.role === "assistant" ? "bot" : "user",
+          text: m.content,
+        }));
+        setMessages(formatted);
+      }
+    } catch {
+      console.log("History not available.");
+    }
+  };
+
+  // ------------------------------
+  // SEND MESSAGE
+  // ------------------------------
+  const sendMessageToBackend = async (message: string) => {
+    if (!userId) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: userId,
+          message,
+          max_interactions: 1,
+        }),
+      });
+
+      const data = await res.json();
+      return data.response;
+    } catch (err) {
+        console.log(err)
+      return "⚠ Server error. Please try again.";
+    }
+  };
+
+  // ------------------------------
+  // SEND MESSAGE FLOW
+  // ------------------------------
+  const handleSend = async () => {
+    if (!input.trim()) return;
+
+    // Add user message instantly
+    setMessages((prev) => [...prev, { sender: "user", text: input }]);
+    const userMessage = input;
+    setInput("");
+
+    setTyping(true);
+
+    // Send to backend
+    const reply = await sendMessageToBackend(userMessage);
+
+    setTyping(false);
+
+    // Add bot reply
+    setMessages((prev) => [...prev, { sender: "bot", text: reply || "No response." }]);
+  };
+
+  // ------------------------------
+  // CLEAR CHAT HISTORY
+  // ------------------------------
+  const handleClearHistory = async () => {
+    if (!userId) return;
+
+    try {
+      await fetch(`${API_BASE}/chat/history/${userId}`, {
+        method: "DELETE",
+      });
+
+      setMessages([]);
+      setShowMenu(false);
+    } catch {
+      alert("Unable to clear history.");
+    }
+  };
+
+  // ------------------------------
+  // LOGOUT
+  // ------------------------------
+  const handleLogout = () => {
+    localStorage.removeItem("user_id");
+    setUserId(null);
+    setMessages(initialMessages);
+  };
+
+  // Scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, typing]);
@@ -34,43 +163,23 @@ export default function Chat() {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
+  // Load chat history after login
+  useEffect(() => {
+  if (!userId) return;
 
-    setMessages((prev) => [...prev, { sender: "user", text: input }]);
-    setInput("");
-
-    setTyping(true);
-    setTimeout(() => {
-      setMessages((prev) => [
-        ...prev,
-        {
-          sender: "bot",
-          text: "✨ Here's a thoughtful reply (dummy response).",
-        },
-      ]);
-      setTyping(false);
-    }, 1000);
+  const fetchHistory = async () => {
+    await loadChatHistory(userId);
   };
 
-  const handleClear = () => {
-    setMessages([]);
-    setShowMenu(false);
-  };
+  fetchHistory();
+}, [userId]);
 
-  const handleLogout = () => {
-    localStorage.removeItem("auth");
-    setLoggedIn(false);
-  };
 
-  const handleLogin = () => {
-    if (email === "demo@chat.com" && pass === "demo123") {
-      localStorage.setItem("auth", "true");
-      setLoggedIn(true);
-    } else {
-      setError("Invalid credentials");
-    }
-  };
+
+
+  // ===========================================================
+  //                       UI STARTS
+  // ===========================================================
 
   return (
     <div
@@ -83,54 +192,32 @@ export default function Chat() {
       {/* HEADER */}
       <header
         className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 backdrop-blur border-b"
-        style={{
-          backgroundColor: "var(--bg-alt)",
-          borderColor: "var(--bg-alt)",
-        }}
+        style={{ backgroundColor: "var(--bg-alt)", borderColor: "var(--bg-alt)" }}
       >
-        <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-500 to-fuchsia-600 
-        bg-clip-text text-transparent">
-          AI Bot
+        <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-500 to-fuchsia-600 bg-clip-text text-transparent">
+          Seductra💘
         </h1>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setDark((d) => !d)}
-            className="p-2 rounded-full hover:bg-gray-200/40"
-          >
-            <span className="material-symbols-rounded text-2xl">
-              {dark ? "light_mode" : "dark_mode"}
-            </span>
+          <button onClick={() => setDark((d) => !d)} className="p-2 rounded-full hover:bg-gray-200/40">
+            <span className="material-symbols-rounded text-2xl">{dark ? "light_mode" : "dark_mode"}</span>
           </button>
 
-          {/* Menu */}
           <div className="relative">
-            <button
-              onClick={() => setShowMenu((v) => !v)}
-              className="p-2 rounded-full hover:bg-gray-200/40"
-            >
+            <button onClick={() => setShowMenu((v) => !v)} className="p-2 rounded-full hover:bg-gray-200/40">
               <span className="material-symbols-rounded text-2xl">more_vert</span>
             </button>
 
             {showMenu && (
               <div
                 className="absolute right-0 mt-3 w-40 rounded-xl shadow-lg border z-20"
-                style={{
-                  backgroundColor: "var(--bg)",
-                  borderColor: "var(--bg-alt)",
-                }}
+                style={{ backgroundColor: "var(--bg)", borderColor: "var(--bg-alt)" }}
               >
-                <button
-                  onClick={handleClear}
-                  className="w-full text-left px-5 py-2 hover:bg-gray-200/40"
-                >
-                  Clear Chat
+                <button onClick={handleClearHistory} className="w-full text-left px-5 py-2 hover:bg-gray-200/40">
+                  Clear History
                 </button>
 
-                <button
-                  onClick={handleLogout}
-                  className="w-full text-left px-5 py-2 hover:bg-gray-200/40"
-                >
+                <button onClick={handleLogout} className="w-full text-left px-5 py-2 hover:bg-gray-200/40">
                   Logout
                 </button>
               </div>
@@ -139,7 +226,7 @@ export default function Chat() {
         </div>
       </header>
 
-      {/* CHAT CONTENT */}
+      {/* CHAT SECTION */}
       <main className="flex-1 max-w-4xl mx-auto w-full px-4 md:px-10 py-6 space-y-6 overflow-y-auto">
 
         {messages.map((msg, i) => (
@@ -148,26 +235,21 @@ export default function Chat() {
               {msg.sender === "bot" ? "smart_toy" : "person"}
             </span>
 
-           <div
-  className={`
-    inline-block
-    px-5 py-3 rounded-3xl shadow-sm
-    max-w-[75%] sm:max-w-[70%] md:max-w-[65%] lg:max-w-[60%]
-    break-words
-  `}
-  style={{
-    background:
-      msg.sender === "user"
-        ? "var(--bubble-user)"
-        : "var(--bubble-bot)",
-    color: msg.sender === "user" ? "#fff" : "var(--fg)",
-    border:
-      msg.sender === "bot" ? "1px solid var(--bg-alt)" : "none",
-  }}
->
-  {msg.text}
-</div>
-
+            <div
+              className="
+                inline-block
+                px-5 py-3 rounded-3xl shadow-sm
+                max-w-[75%] sm:max-w-[70%] md:max-w-[65%] lg:max-w-[60%]
+                break-words
+              "
+              style={{
+                background: msg.sender === "user" ? "var(--bubble-user)" : "var(--bubble-bot)",
+                color: msg.sender === "user" ? "#fff" : "var(--fg)",
+                border: msg.sender === "bot" ? "1px solid var(--bg-alt)" : "none",
+              }}
+            >
+              {msg.text}
+            </div>
           </div>
         ))}
 
@@ -186,24 +268,14 @@ export default function Chat() {
       </main>
 
       {/* INPUT */}
-      <footer
-        className="p-4 border-t backdrop-blur"
-        style={{
-          backgroundColor: "var(--bg-alt)",
-          borderColor: "var(--bg-alt)",
-        }}
-      >
+      <footer className="p-4 border-t backdrop-blur" style={{ backgroundColor: "var(--bg-alt)", borderColor: "var(--bg-alt)" }}>
         <div className="flex items-center gap-3 max-w-4xl mx-auto">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
             className="flex-1 px-5 py-3 rounded-full border shadow-sm"
-            style={{
-              backgroundColor: "var(--bg)",
-              borderColor: "var(--bg-alt)",
-              color: "var(--fg)",
-            }}
+            style={{ backgroundColor: "var(--bg)", borderColor: "var(--bg-alt)", color: "var(--fg)" }}
             placeholder="Type your message..."
           />
 
@@ -216,51 +288,33 @@ export default function Chat() {
         </div>
       </footer>
 
-      {/* FLOATING LOGIN MODAL */}
-      {!loggedIn && (
-        <div
-          className="
-            absolute inset-0 flex items-center justify-center 
-            backdrop-blur-md bg-black/20 z-50
-            px-4
-          "
-        >
-          <div
-            className="w-full max-w-sm p-8 rounded-2xl shadow-xl border"
-            style={{
-              backgroundColor: "var(--bg-alt)",
-              borderColor: "var(--bg-alt)",
-            }}
+      {/* LOGIN MODAL */}
+      {!userId && (
+        <div className="absolute inset-0 flex items-center justify-center backdrop-blur-md bg-black/20 z-50 px-4">
+          <div className="w-full max-w-sm p-8 rounded-2xl shadow-xl border"
+            style={{ backgroundColor: "var(--bg-alt)", borderColor: "var(--bg-alt)" }}
           >
             <h2 className="text-2xl font-bold mb-6 text-center">Login</h2>
 
             <input
-              type="email"
-              placeholder="Email"
+              type="text"
+              placeholder="User ID"
               className="w-full mb-4 p-3 rounded-lg border"
-              style={{
-                backgroundColor: "var(--bg)",
-                borderColor: "var(--bg-alt)",
-                color: "var(--fg)",
-              }}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              style={{ backgroundColor: "var(--bg)", borderColor: "var(--bg-alt)", color: "var(--fg)" }}
+              value={loginUserId}
+              onChange={(e) => setLoginUserId(e.target.value)}
             />
 
             <input
               type="password"
               placeholder="Password"
               className="w-full mb-4 p-3 rounded-lg border"
-              style={{
-                backgroundColor: "var(--bg)",
-                borderColor: "var(--bg-alt)",
-                color: "var(--fg)",
-              }}
-              value={pass}
-              onChange={(e) => setPass(e.target.value)}
+              style={{ backgroundColor: "var(--bg)", borderColor: "var(--bg-alt)", color: "var(--fg)" }}
+              value={loginPassword}
+              onChange={(e) => setLoginPassword(e.target.value)}
             />
 
-            {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
+            {loginError && <p className="text-red-500 text-sm mb-3">{loginError}</p>}
 
             <button
               onClick={handleLogin}
@@ -268,19 +322,12 @@ export default function Chat() {
             >
               Login
             </button>
-
-            <p className="text-xs opacity-70 mt-4 text-center">
-              Demo: demo@chat.com / demo123
-            </p>
           </div>
         </div>
       )}
 
-      {/* Icons */}
-      <link
-        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:FILL@0..1"
-        rel="stylesheet"
-      />
+      {/* MATERIAL ICONS */}
+      <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:FILL@0..1" rel="stylesheet" />
     </div>
   );
 }
