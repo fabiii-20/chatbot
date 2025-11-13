@@ -1,0 +1,21 @@
+@import "tailwindcss";
+
+/* Light theme */
+:root {
+  --bg: #ffffff;
+  --bg-alt: #f3f4f6;
+  --fg: #1a1a1a;
+
+  --bubble-user: linear-gradient(to bottom right, #4f46e5, #d946ef);
+  --bubble-bot: #f3f4f6;
+}
+
+/* Dark theme */
+.dark {
+  --bg: #0d0a22;
+  --bg-alt: #15102d;
+  --fg: #e5e7eb;
+
+  --bubble-user: linear-gradient(to bottom right, #4338ca, #a21caf);
+  --bubble-bot: #1e1b4b;
+}
