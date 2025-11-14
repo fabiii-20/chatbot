@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
@@ -18,14 +20,16 @@ export default function Chat() {
   const [showMenu, setShowMenu] = useState(false);
 
   // login states
-  const [userId, setUserId] = useState<string | null>(localStorage.getItem("user_id"));
+  const [userId, setUserId] = useState<string | null>(
+    localStorage.getItem("user_id")
+  );
   const [loginUserId, setLoginUserId] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-    // ------------------------------
+  // ------------------------------
   // LOGIN API CALL
   // ------------------------------
   const handleLogin = async () => {
@@ -51,10 +55,9 @@ export default function Chat() {
       // store user_id
       localStorage.setItem("user_id", data.user_id);
       setUserId(data.user_id);
-
     } catch (err) {
       setLoginError("Unable to connect to server");
-      console.log(err)
+      console.log(err);
     }
   };
 
@@ -99,7 +102,7 @@ export default function Chat() {
       const data = await res.json();
       return data.response;
     } catch (err) {
-        console.log(err)
+      console.log(err);
       return "⚠ Server error. Please try again.";
     }
   };
@@ -123,7 +126,10 @@ export default function Chat() {
     setTyping(false);
 
     // Add bot reply
-    setMessages((prev) => [...prev, { sender: "bot", text: reply || "No response." }]);
+    setMessages((prev) => [
+      ...prev,
+      { sender: "bot", text: reply || "No response." },
+    ]);
   };
 
   // ------------------------------
@@ -165,17 +171,14 @@ export default function Chat() {
 
   // Load chat history after login
   useEffect(() => {
-  if (!userId) return;
+    if (!userId) return;
 
-  const fetchHistory = async () => {
-    await loadChatHistory(userId);
-  };
+    const fetchHistory = async () => {
+      await loadChatHistory(userId);
+    };
 
-  fetchHistory();
-}, [userId]);
-
-
-
+    fetchHistory();
+  }, [userId]);
 
   // ===========================================================
   //                       UI STARTS
@@ -192,32 +195,54 @@ export default function Chat() {
       {/* HEADER */}
       <header
         className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 backdrop-blur border-b"
-        style={{ backgroundColor: "var(--bg-alt)", borderColor: "var(--bg-alt)" }}
+        style={{
+          backgroundColor: "var(--bg-alt)",
+          borderColor: "var(--bg-alt)",
+        }}
       >
         <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-500 to-fuchsia-600 bg-clip-text text-transparent">
           Seductra💘
         </h1>
 
         <div className="flex items-center gap-2">
-          <button onClick={() => setDark((d) => !d)} className="p-2 rounded-full hover:bg-gray-200/40">
-            <span className="material-symbols-rounded text-2xl">{dark ? "light_mode" : "dark_mode"}</span>
+          <button
+            onClick={() => setDark((d) => !d)}
+            className="p-2 rounded-full hover:bg-gray-200/40"
+          >
+            <span className="material-symbols-rounded text-2xl">
+              {dark ? "light_mode" : "dark_mode"}
+            </span>
           </button>
 
           <div className="relative">
-            <button onClick={() => setShowMenu((v) => !v)} className="p-2 rounded-full hover:bg-gray-200/40">
-              <span className="material-symbols-rounded text-2xl">more_vert</span>
+            <button
+              onClick={() => setShowMenu((v) => !v)}
+              className="p-2 rounded-full hover:bg-gray-200/40"
+            >
+              <span className="material-symbols-rounded text-2xl">
+                more_vert
+              </span>
             </button>
 
             {showMenu && (
               <div
                 className="absolute right-0 mt-3 w-40 rounded-xl shadow-lg border z-20"
-                style={{ backgroundColor: "var(--bg)", borderColor: "var(--bg-alt)" }}
+                style={{
+                  backgroundColor: "var(--bg)",
+                  borderColor: "var(--bg-alt)",
+                }}
               >
-                <button onClick={handleClearHistory} className="w-full text-left px-5 py-2 hover:bg-gray-200/40">
+                <button
+                  onClick={handleClearHistory}
+                  className="w-full text-left px-5 py-2 hover:bg-gray-200/40"
+                >
                   Clear History
                 </button>
 
-                <button onClick={handleLogout} className="w-full text-left px-5 py-2 hover:bg-gray-200/40">
+                <button
+                  onClick={handleLogout}
+                  className="w-full text-left px-5 py-2 hover:bg-gray-200/40"
+                >
                   Logout
                 </button>
               </div>
@@ -228,9 +253,13 @@ export default function Chat() {
 
       {/* CHAT SECTION */}
       <main className="flex-1 max-w-4xl mx-auto w-full px-4 md:px-10 py-6 space-y-6 overflow-y-auto">
-
         {messages.map((msg, i) => (
-          <div key={i} className={`flex gap-3 ${msg.sender === "user" ? "justify-end" : "justify-start"}`}>
+          <div
+            key={i}
+            className={`flex gap-3 ${
+              msg.sender === "user" ? "justify-end" : "justify-start"
+            }`}
+          >
             <span className="material-symbols-rounded text-3xl opacity-80 self-start">
               {msg.sender === "bot" ? "smart_toy" : "person"}
             </span>
@@ -243,12 +272,21 @@ export default function Chat() {
                 break-words
               "
               style={{
-                background: msg.sender === "user" ? "var(--bubble-user)" : "var(--bubble-bot)",
+                background:
+                  msg.sender === "user"
+                    ? "var(--bubble-user)"
+                    : "var(--bubble-bot)",
                 color: msg.sender === "user" ? "#fff" : "var(--fg)",
-                border: msg.sender === "bot" ? "1px solid var(--bg-alt)" : "none",
+                border:
+                  msg.sender === "bot" ? "1px solid var(--bg-alt)" : "none",
               }}
             >
-              {msg.text}
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                className="prose prose-invert max-w-full"
+              >
+                {msg.text}
+              </ReactMarkdown>
             </div>
           </div>
         ))}
@@ -268,14 +306,24 @@ export default function Chat() {
       </main>
 
       {/* INPUT */}
-      <footer className="p-4 border-t backdrop-blur" style={{ backgroundColor: "var(--bg-alt)", borderColor: "var(--bg-alt)" }}>
+      <footer
+        className="p-4 border-t backdrop-blur"
+        style={{
+          backgroundColor: "var(--bg-alt)",
+          borderColor: "var(--bg-alt)",
+        }}
+      >
         <div className="flex items-center gap-3 max-w-4xl mx-auto">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
             className="flex-1 px-5 py-3 rounded-full border shadow-sm"
-            style={{ backgroundColor: "var(--bg)", borderColor: "var(--bg-alt)", color: "var(--fg)" }}
+            style={{
+              backgroundColor: "var(--bg)",
+              borderColor: "var(--bg-alt)",
+              color: "var(--fg)",
+            }}
             placeholder="Type your message..."
           />
 
@@ -291,8 +339,12 @@ export default function Chat() {
       {/* LOGIN MODAL */}
       {!userId && (
         <div className="absolute inset-0 flex items-center justify-center backdrop-blur-md bg-black/20 z-50 px-4">
-          <div className="w-full max-w-sm p-8 rounded-2xl shadow-xl border"
-            style={{ backgroundColor: "var(--bg-alt)", borderColor: "var(--bg-alt)" }}
+          <div
+            className="w-full max-w-sm p-8 rounded-2xl shadow-xl border"
+            style={{
+              backgroundColor: "var(--bg-alt)",
+              borderColor: "var(--bg-alt)",
+            }}
           >
             <h2 className="text-2xl font-bold mb-6 text-center">Login</h2>
 
@@ -300,7 +352,11 @@ export default function Chat() {
               type="text"
               placeholder="User ID"
               className="w-full mb-4 p-3 rounded-lg border"
-              style={{ backgroundColor: "var(--bg)", borderColor: "var(--bg-alt)", color: "var(--fg)" }}
+              style={{
+                backgroundColor: "var(--bg)",
+                borderColor: "var(--bg-alt)",
+                color: "var(--fg)",
+              }}
               value={loginUserId}
               onChange={(e) => setLoginUserId(e.target.value)}
             />
@@ -309,12 +365,18 @@ export default function Chat() {
               type="password"
               placeholder="Password"
               className="w-full mb-4 p-3 rounded-lg border"
-              style={{ backgroundColor: "var(--bg)", borderColor: "var(--bg-alt)", color: "var(--fg)" }}
+              style={{
+                backgroundColor: "var(--bg)",
+                borderColor: "var(--bg-alt)",
+                color: "var(--fg)",
+              }}
               value={loginPassword}
               onChange={(e) => setLoginPassword(e.target.value)}
             />
 
-            {loginError && <p className="text-red-500 text-sm mb-3">{loginError}</p>}
+            {loginError && (
+              <p className="text-red-500 text-sm mb-3">{loginError}</p>
+            )}
 
             <button
               onClick={handleLogin}
@@ -327,7 +389,10 @@ export default function Chat() {
       )}
 
       {/* MATERIAL ICONS */}
-      <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:FILL@0..1" rel="stylesheet" />
+      <link
+        href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:FILL@0..1"
+        rel="stylesheet"
+      />
     </div>
   );
 }
